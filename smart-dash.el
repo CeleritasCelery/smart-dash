@@ -78,11 +78,16 @@ underscore in a row."
   nil "" smart-dash-mode-keymap
   (if smart-dash-mode
       (progn
-        (and (memq major-mode smart-dash-c-modes)
-             (smart-dash-c-mode 1))
-        (smart-dash-isearch-install))
+        (when (memq major-mode smart-dash-c-modes)
+          (smart-dash-c-mode 1))
+        (smart-dash-isearch-install)
+        (when smart-dash-minibuffer-enabled
+          (add-hook 'minibuffer-setup-hook 'smart-dash-minibuffer-install nil 'local)
+          (add-hook 'minibuffer-exit-hook 'smart-dash-minibuffer-exit nil 'local)))
     (smart-dash-isearch-uninstall)
-    (smart-dash-c-mode 0)))
+    (smart-dash-c-mode 0)
+    (remove-hook 'minibuffer-setup-hook 'smart-dash-minibuffer-install 'local)
+    (remove-hook 'minibuffer-exit-hook 'smart-dash-minibuffer-exit 'local)))
 
 (easy-mmode-defmap smart-dash-c-mode-keymap
    ; Remove definition with (makunbound 'smart-dash-c-mode-keymap)
@@ -323,7 +328,6 @@ activated in is controlled by `smart-dash-minibuffer-by-default',
   :type 'boolean)
 
 (defcustom smart-dash-minibuffer-by-default nil
-  ; Remove definition with (makunbound 'smart-dash-minibuffer-by-default)
   "If non-nil, activate Smart-Dash mode in the minibuffer for all
 commands except those listed in `smart-dash-minibuffer-deny-commands'.
 
@@ -388,35 +392,25 @@ non-nil."
         (cdr smart-dash-minibuffer-this-command-stack)) ; pop
   (rplaca smart-dash-minibuffer-last-exit-command-stack this-command))
 
-(add-hook 'minibuffer-exit-hook 'smart-dash-minibuffer-exit)
-
 (defun smart-dash-minibuffer-install ()
-  (unless (eq this-command
-              (car smart-dash-minibuffer-last-exit-command-stack))
-    (rplaca smart-dash-minibuffer-this-command-stack this-command))
-  (let* ((selected-buffer (window-buffer (minibuffer-selected-window)))
-         (sd-active
-          (with-current-buffer selected-buffer smart-dash-mode))
-         (sd-c-active
-          (with-current-buffer selected-buffer smart-dash-c-mode))
-         (local-this-command
-          (car smart-dash-minibuffer-this-command-stack))
-         (allow (and smart-dash-minibuffer-enabled
-                     (if smart-dash-minibuffer-by-default
-                         (not (memq local-this-command
-                                    smart-dash-minibuffer-deny-commands))
-                       (memq local-this-command
-                             smart-dash-minibuffer-allow-commands)))))
-    (when allow
-      (if sd-active
+  (when smart-dash-minibuffer-enabled
+    (unless (eq this-command
+                (car smart-dash-minibuffer-last-exit-command-stack))
+      (setcar smart-dash-minibuffer-this-command-stack this-command))
+    (let ((selected-buffer (window-buffer (minibuffer-selected-window)))
+          (local-this-command (car smart-dash-minibuffer-this-command-stack)))
+      (when (if smart-dash-minibuffer-by-default
+                (not (memq local-this-command
+                           smart-dash-minibuffer-deny-commands))
+              (memq local-this-command
+                    smart-dash-minibuffer-allow-commands))
+        (when (with-current-buffer selected-buffer smart-dash-mode)
           (smart-dash-mode))
-      (if sd-c-active
+        (when (with-current-buffer selected-buffer smart-dash-c-mode)
           (smart-dash-c-mode))))
-  (setq smart-dash-minibuffer-last-exit-command-stack
-        (cons nil smart-dash-minibuffer-last-exit-command-stack))
-  (setq smart-dash-minibuffer-this-command-stack
-        (cons nil smart-dash-minibuffer-this-command-stack)))
-
-(add-hook 'minibuffer-setup-hook 'smart-dash-minibuffer-install)
+    (setq smart-dash-minibuffer-last-exit-command-stack
+          (cons nil smart-dash-minibuffer-last-exit-command-stack))
+    (setq smart-dash-minibuffer-this-command-stack
+          (cons nil smart-dash-minibuffer-this-command-stack))))
 
 (provide 'smart-dash)
